@@ -11,10 +11,10 @@
 
 El laboratorio consiste en construir un **gemelo digital** de un sistema físico sencillo: un
 servomotor de posición controlado localmente por un potenciómetro y conectado por puerto
-serial a una escena de Unity. El sistema debe funcionar en los **dos sentidos**:
+serial a una escena de **Godot 4**. El sistema debe funcionar en los **dos sentidos**:
 
 - el **mando físico** (potenciómetro) mueve el servo y la escena se actualiza sola;
-- el **mando digital** (control en Unity) mueve el servo y el firmware reporta el nuevo estado.
+- el **mando digital** (control en la escena) mueve el servo y el firmware reporta el nuevo estado.
 
 Como ambos mandos pueden actuar a la vez, cada grupo debe diseñar una **política de
 arbitraje** que defina cuál prevalece y cómo se trata el ruido del potenciómetro. Después se
@@ -22,6 +22,12 @@ mide experimentalmente el **error angular** y la **coherencia de estado** entre 
 
 El entregable no es solo un montaje que funciona: es un sistema cuya clasificación como
 gemelo digital se sostiene con un marco teórico, una política justificada y datos propios.
+
+> **Nota sobre la plataforma.** El enunciado menciona Unity. El grupo implementa la
+> representación digital en **Godot 4** con el addon **GdSerial** para el enlace serial, porque
+> esa combinación ya se usó con éxito en el proyecto anterior del curso. El protocolo, los
+> requisitos y los entregables no cambian; conviene dejar la decisión explícita en el informe y
+> en el póster.
 
 ---
 
@@ -32,7 +38,7 @@ gemelo digital se sostiene con un marco teórico, una política justificada y da
 | Variable controlada por el ángulo | Orientación de la antena del radar |
 | Comportamiento a simular | Pantalla de radar con objetos en movimiento que **solo se detectan** cuando la antena apunta hacia ellos |
 | Mando físico | Potenciómetro |
-| Mando digital | Control en la escena de Unity |
+| Mando digital | Control en la escena de Godot |
 | Rango útil | *Definir por el grupo* (0–180° o un subrango justificado) |
 
 La escena no puede limitarse a girar un objeto: debe mostrar el barrido, los blancos en
@@ -54,11 +60,12 @@ movimiento y la lógica de detección, de modo que la situación se reconozca si
 │   ├── 04-interrupciones.md
 │   └── 05-comunicacion-serial-bidireccional.md
 ├── firmware/                 (pendiente) Código del Arduino
-└── unity/                    (pendiente) Proyecto de Unity
+└── godot/                    (pendiente) Proyecto de Godot
+    └── addons/gdserial/      Addon de comunicación serial (MIT)
 ```
 
 > **Estado actual:** el repositorio contiene el enunciado, la rúbrica y las guías de lectura.
-> Las carpetas `firmware/` y `unity/` se agregan a medida que avanza el desarrollo.
+> Las carpetas `firmware/` y `godot/` se agregan a medida que avanza el desarrollo.
 
 ---
 
@@ -74,7 +81,7 @@ preguntas de autoevaluación y **fuentes enlazadas y comentadas**.
 | 2 | Servomotores | [02-servomotores.md](./lectura_previa/02-servomotores.md) | Funcionamiento interno, PWM de control, `Servo.h` y sus restricciones de temporizadores |
 | 3 | Programación no bloqueante | [03-programacion-no-bloqueante.md](./lectura_previa/03-programacion-no-bloqueante.md) | `millis()` frente a `delay()`, tareas periódicas y bloqueos invisibles |
 | 4 | Interrupciones | [04-interrupciones.md](./lectura_previa/04-interrupciones.md) | `attachInterrupt()`, restricciones de las ISR y cuándo preferirlas sobre la consulta |
-| 5 | Comunicación serial bidireccional | [05-comunicacion-serial-bidireccional.md](./lectura_previa/05-comunicacion-serial-bidireccional.md) | Delimitación de mensajes, parser sin bloqueo y lectura no bloqueante desde Unity |
+| 5 | Comunicación serial bidireccional | [05-comunicacion-serial-bidireccional.md](./lectura_previa/05-comunicacion-serial-bidireccional.md) | Delimitación de mensajes, parser sin bloqueo y lectura no bloqueante en Godot con GdSerial |
 
 **Cómo usar las guías:** leer una, responder las preguntas de autoevaluación sin mirar el
 texto y recién después revisar las fuentes originales. El marco teórico del póster debe salir
@@ -85,14 +92,16 @@ de esas fuentes, no de las guías: las guías son un mapa, no la cita.
 ## Arquitectura del sistema
 
 ```
-┌─────────────┐      A:<angulo>      ┌─────────────┐ S:<angulo>,<fuente>  ┌─────────────┐
-│    Unity    │ ──────────────────►  │   Arduino   │ ──────────────────►  │    Unity    │
-│    (mando   │                      │    + SG90   │                      │   (escena)  │
-│   digital)  │                      │    + pot.   │                      │             │
-└─────────────┘                      └─────────────┘                      └─────────────┘
-                                            ▲
-                                            │ mando físico
-                                       potenciómetro
+                         A:<angulo>\n        
+┌───────────────┐                            ┌───────────────┐
+│     Godot     │ ─────────────────────────► │    Arduino    │
+│  escena + UI  │                            │     + SG90    │
+│               │ ◄────────────────────────  │     + pot.    │
+└───────────────┘                            └───────────────┘
+                    S:<angulo>,<fuente>\n    
+                                                     │
+                                                     ▲ mando físico
+                                                 potenciómetro
 ```
 
 ### Protocolo de comunicación
@@ -101,12 +110,29 @@ Texto plano, **9600 baudios**, terminado en salto de línea (`\n`):
 
 | Sentido | Formato | Función |
 | --- | --- | --- |
-| Unity → Arduino | `A:<angulo>` | Comando digital; entero entre 0 y 180 |
-| Arduino → Unity | `S:<angulo>,<fuente>` | Reporte de estado; `<fuente>` es `POT` (mando físico) o `DIG` (mando digital) |
+| Godot → Arduino | `A:<angulo>` | Comando digital; entero entre 0 y 180 |
+| Arduino → Godot | `S:<angulo>,<fuente>` | Reporte de estado; `<fuente>` es `POT` (mando físico) o `DIG` (mando digital) |
 
 Reglas que el firmware debe cumplir: los valores fuera de rango y los mensajes mal formados se
 **descartan sin afectar el funcionamiento**, y los reportes reflejan los **ángulos intermedios**
 del movimiento progresivo, no solo el objetivo.
+
+### Enlace serial en Godot: GdSerial
+
+El puerto serial se maneja con el addon **[GdSerial](https://github.com/SujithChristopher/gdserial)**
+(Rust sobre GDExtension, licencia MIT, Godot 4.4+), el mismo que se usó en el proyecto anterior
+del curso. Ofrece dos clases:
+
+| Clase | Modelo | Lectura no bloqueante |
+| --- | --- | --- |
+| `GdSerial` | Síncrona, un puerto | **Sí, con sondeo**: `bytes_available()` + `read()`, nunca `readline()` en `_process` |
+| `GdSerialManager` | Asíncrona, hilos + señales | **Sí, por diseño**: el hilo lector hace la E/S y `poll_events()` entrega en el hilo principal |
+
+El punto fino, que está desarrollado en la
+[guía 5](./lectura_previa/05-comunicacion-serial-bidireccional.md#58-permite-gdserial-lecturas-no-bloqueantes),
+es que `GdSerial.read()` **sí puede bloquear** hasta el timeout configurado (1000 ms por
+defecto) si se llama sin datos. La lectura solo es no bloqueante cuando se consulta antes
+`bytes_available()` y se configura `set_timeout(0)`.
 
 ---
 
@@ -122,12 +148,12 @@ del movimiento progresivo, no solo el objetivo.
 - [ ] Política de arbitraje entre mando físico y digital.
 - [ ] Parser serial no bloqueante, con validación de prefijo, rango y línea completa.
 
-### Representación digital (Unity)
+### Representación digital (Godot)
 
 - [ ] Escena que simula la situación 7 y se reconoce sin explicación.
 - [ ] La variable se actualiza automáticamente con cada reporte `S:`.
 - [ ] Mando digital que se envía automáticamente como comando `A:`.
-- [ ] Lectura del puerto **sin bloquear el hilo principal**.
+- [ ] Lectura del puerto con GdSerial **sin bloquear el hilo principal**.
 - [ ] Las actualizaciones recibidas **no se reenvían** como comandos.
 
 ### Política de arbitraje
@@ -159,7 +185,7 @@ el **tiempo de estabilización**.
 
 ## Entregables
 
-1. Repositorio con el firmware, el proyecto de Unity y las instrucciones de ejecución.
+1. Repositorio con el firmware, el proyecto de Godot y las instrucciones de ejecución.
 2. Video editado de máximo 3 minutos, con secciones y con el sistema físico y la representación
    visibles a la vez.
 3. Póster en PDF, proporción DIN A1 vertical, con el logotipo de la Universidad.
@@ -173,10 +199,17 @@ Los criterios detallados están en [rubrica.md](./rubrica.md) y el enunciado com
 
 *Pendiente.* Cuando estén disponibles el firmware y la escena, esta sección documentará:
 
-1. Carga del sketch en el Arduino y verificación del puerto.
-2. Apertura del proyecto de Unity y de la escena principal.
-3. Selección del puerto serial (nombre y permisos según el sistema operativo).
-4. Verificación de ambos flujos y de la política de arbitraje.
+1. Carga del sketch en el Arduino y verificación del puerto (monitor serial del IDE, o
+   `pio device monitor` si se usa PlatformIO).
+2. Copia de `addons/gdserial/` al proyecto de Godot y activación en
+   **Project → Project Settings → Plugins**.
+3. Apertura de la escena principal y selección del puerto en el inspector
+   (`/dev/ttyUSB0` o `/dev/ttyACM0` en Linux, `COM3` en Windows).
+4. Permisos del puerto en Linux: el usuario debe pertenecer al grupo `dialout`.
+5. Verificación de ambos flujos y de la política de arbitraje.
+
+> El addon y el firmware deben usar la **misma velocidad** (9600 baudios en este laboratorio).
+> Si el monitor serial del IDE tiene el puerto abierto, Godot no podrá abrirlo.
 
 ---
 
@@ -197,8 +230,10 @@ Los criterios detallados están en [rubrica.md](./rubrica.md) y el enunciado com
   <https://docs.arduino.cc/language-reference/en/functions/time/millis/>
 - Arduino. *`attachInterrupt()` — Language Reference.*
   <https://docs.arduino.cc/language-reference/en/functions/external-interrupts/attachInterrupt/>
-- Microsoft Learn. *`SerialPort` Class.*
-  <https://learn.microsoft.com/en-us/dotnet/api/system.io.ports.serialport>
+- Sujith Christopher. *GdSerial — Serial Communication Library for Godot 4.*
+  <https://github.com/SujithChristopher/gdserial>
+- Godot Engine. *Thread-safe APIs.*
+  <https://docs.godotengine.org/en/stable/tutorials/performance/thread_safe_apis.html>
 
 La bibliografía completa, con anotaciones sobre qué aporta cada fuente, está al final de cada
 guía en [lectura_previa/](./lectura_previa/).

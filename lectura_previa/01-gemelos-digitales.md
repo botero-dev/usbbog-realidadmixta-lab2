@@ -43,7 +43,7 @@ marco cómodo para ordenar el diseño del laboratorio:
 | Dimensión | En este laboratorio |
 | --- | --- |
 | Entidad física | Arduino + servomotor SG90 + potenciómetro |
-| Entidad virtual | Escena de Unity (radar de vigilancia) |
+| Entidad virtual | Escena de Godot (radar de vigilancia) |
 | Datos | Mensajes `A:` y `S:` por el puerto serial |
 | Servicios | Simulación del barrido, detección de blancos, registro de eventos |
 | Conexión | Enlace serial USB a 9600 baudios, en ambos sentidos |
@@ -129,13 +129,13 @@ Traducido a las categorías anteriores:
 | Elemento | Papel |
 | --- | --- |
 | Servomotor + potenciómetro | Objeto físico; el ángulo es la orientación real de la antena |
-| Escena de Unity | Representación; el barrido del radar y las detecciones son el comportamiento simulado |
+| Escena de Godot | Representación; el barrido del radar y las detecciones son el comportamiento simulado |
 | `S:<angulo>,<fuente>` | Flujo físico → digital (automático) |
 | `A:<angulo>` desde un control de la escena | Flujo digital → físico (automático) |
 | Política de arbitraje | Regla que decide qué mando prevalece cuando ambos están activos |
 
 Con ambos flujos automáticos, el sistema **es un gemelo digital** según Kritzinger. Si se
-desconectara el envío de comandos desde Unity (por ejemplo, dejando la escena solo como
+desconectara el envío de comandos desde Godot (por ejemplo, dejando la escena solo como
 visualizador), pasaría a ser una **sombra digital**, y si además la actualización se hiciera a
 mano, un **modelo digital**. Esa progresión es exactamente lo que pide la pregunta 3 de
 análisis.
@@ -154,7 +154,7 @@ cosas se discuten por separado en el análisis (pregunta 1).
 | Error | Por qué es un error |
 | --- | --- |
 | "Un gemelo digital es una réplica 3D de un objeto" | Describe un modelo, no el criterio de intercambio de datos. |
-| "Como Unity se actualiza solo, ya es gemelo digital" | Falta el otro sentido: si no se envían comandos automáticamente, es una sombra. |
+| "Como la escena se actualiza sola, ya es gemelo digital" | Falta el otro sentido: si no se envían comandos automáticamente, es una sombra. |
 | Usar "sombra digital" como sinónimo de "gemelo digital" | Es justo la confusión que la rúbrica penaliza. |
 | Citar solo páginas comerciales | La rúbrica pide al menos tres fuentes **técnicas o académicas**. |
 | No declarar la convención terminológica | Si se usa otra definición, hay que decir cuál y por qué. |
