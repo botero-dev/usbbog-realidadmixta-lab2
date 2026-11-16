@@ -83,6 +83,11 @@ const int UMBRAL_SEGUIMIENTO_DEG = 2;
 // fuera del umbral antes de retomar el mando: descarta picos aislados.
 const uint8_t TICS_CONFIRMACION = 3;
 
+// Tras una retoma del mando físico, los comandos A: se ignoran durante este
+// tiempo. Evita que el software pelee con la mano del usuario: primero se
+// suelta el potenciómetro y solo después la escena vuelve a mandar.
+const uint16_t BLOQUEO_TRAS_RETOMA_MS = 500;
+
 /* -------------------------------- Serial --------------------------------- */
 
 const unsigned long SERIAL_BAUD = 9600;
@@ -110,6 +115,8 @@ uint8_t nLinea = 0;
 bool lineaDescartada = false;
 
 uint8_t ticsFueraDeUmbral = 0;   // confirmación de la retoma del mando físico
+bool bloqueoActivo = false;      // se ignoran los A: mientras dure
+unsigned long tRetomaMs = 0;
 
 /* -------------------------------- Utilidades ----------------------------- */
 
@@ -163,6 +170,13 @@ bool parsearComando(const char *s, int *salida) {
 }
 
 void aplicarComandoDigital(int angulo) {
+	if (bloqueoActivo) {
+		if (millis() - tRetomaMs < BLOQUEO_TRAS_RETOMA_MS) {
+			return;   // el mando físico acaba de tomar el control
+		}
+		bloqueoActivo = false;
+	}
+
 	anguloObjetivo = angulo;
 	fuente = FUENTE_DIG;
 	// Ancla: la posición del potenciómetro en este instante. Para recuperar
@@ -191,6 +205,8 @@ void actualizarControl(unsigned long ahora) {
 			anguloObjetivo = potActual;
 			potAncla = potActual;
 			ticsFueraDeUmbral = 0;
+			bloqueoActivo = true;
+			tRetomaMs = ahora;
 		}
 	} else {
 		ticsFueraDeUmbral = 0;
