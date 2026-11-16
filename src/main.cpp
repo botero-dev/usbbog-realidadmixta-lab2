@@ -40,6 +40,11 @@ const uint8_t MUESTRAS_POT = 8;
 const int ANGULO_MIN = 0;
 const int ANGULO_MAX = 180;
 
+// Sentido de la salida del servo. Con true se escribe 180 - ángulo, para los
+// montajes en los que el eje queda girado 180° respecto al sentido esperado.
+// El potenciómetro y los reportes S: no cambian: siguen en el dominio lógico.
+const bool INVERTIR_SALIDA_SERVO = true;
+
 /* ----------------------------- Temporización ----------------------------- */
 
 // Muestreo del potenciómetro y avance del servo. 20 ms = 50 Hz: suficiente
@@ -127,6 +132,11 @@ int leerPotenciometro() {
 	return ANGULO_MIN + (int)((grados + rango / 2) / rango);
 }
 
+// Punto único de salida hacia el servo: aquí se aplica el sentido del montaje.
+void escribirServo(int angulo) {
+	servo.write(INVERTIR_SALIDA_SERVO ? (ANGULO_MIN + ANGULO_MAX - angulo) : angulo);
+}
+
 // Acepta exclusivamente "A:<entero 0..180>". Descarta cualquier otra cosa:
 // prefijos ajenos, signos, espacios, texto o valores fuera de rango.
 bool parsearComando(const char *s, int *salida) {
@@ -199,7 +209,7 @@ void actualizarControl(unsigned long ahora) {
 		anguloOrdenado += (error > 0.0f) ? pasoMax : -pasoMax;
 	}
 
-	servo.write((int)(anguloOrdenado + 0.5f));
+	escribirServo((int)(anguloOrdenado + 0.5f));
 }
 
 /* ------------------------------- Serial ---------------------------------- */
@@ -254,7 +264,7 @@ void setup() {
 	potAncla = potActual;
 	anguloObjetivo = potActual;
 	anguloOrdenado = (float)potActual;
-	servo.write(potActual);
+	escribirServo(potActual);
 
 	tControl = millis();
 	tReporte = tControl;

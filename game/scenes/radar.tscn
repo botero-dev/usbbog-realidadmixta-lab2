@@ -1,0 +1,137 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/radar_control.gd" id="1_control"]
+[ext_resource type="Script" path="res://scripts/serial_link.gd" id="2_serial"]
+[ext_resource type="Script" path="res://scripts/radar_display.gd" id="3_display"]
+
+[node name="Radar" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_control")
+
+[node name="SerialLink" type="Node" parent="."]
+script = ExtResource("2_serial")
+
+[node name="Fondo" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.05, 0.06, 0.09, 1)
+
+[node name="HBox" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 20
+
+[node name="RadarDisplay" type="Control" parent="HBox"]
+custom_minimum_size = Vector2(420, 420)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+script = ExtResource("3_display")
+
+[node name="PanelControl" type="VBoxContainer" parent="HBox"]
+custom_minimum_size = Vector2(340, 0)
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="Titulo" type="Label" parent="HBox/PanelControl"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 24
+text = "Radar de vigilancia"
+
+[node name="Subtitulo" type="Label" parent="HBox/PanelControl"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.65, 0.70, 0.78, 1)
+theme_override_font_sizes/font_size = 14
+text = "Situación 7 — gemelo digital con servomotor"
+autowrap_mode = 3
+
+[node name="Separador1" type="HSeparator" parent="HBox/PanelControl"]
+layout_mode = 2
+
+[node name="FilaPuerto" type="HBoxContainer" parent="HBox/PanelControl"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="LineEditPuerto" type="LineEdit" parent="HBox/PanelControl/FilaPuerto"]
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "/dev/ttyUSB0 o COM3"
+text = "/dev/ttyUSB0"
+
+[node name="BotonConectar" type="Button" parent="HBox/PanelControl/FilaPuerto"]
+layout_mode = 2
+text = "Conectar"
+
+[node name="EstadoConexion" type="Label" parent="HBox/PanelControl"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.55, 0.55, 1)
+theme_override_font_sizes/font_size = 14
+text = "Desconectado"
+autowrap_mode = 3
+
+[node name="Separador2" type="HSeparator" parent="HBox/PanelControl"]
+layout_mode = 2
+
+[node name="EtiquetaAngulo" type="Label" parent="HBox/PanelControl"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 28
+text = "Servo: 90°"
+
+[node name="EtiquetaFuente" type="Label" parent="HBox/PanelControl"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Mando: físico (potenciómetro)"
+autowrap_mode = 3
+
+[node name="Separador3" type="HSeparator" parent="HBox/PanelControl"]
+layout_mode = 2
+
+[node name="EtiquetaSlider" type="Label" parent="HBox/PanelControl"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 16
+text = "Posición manual: 90°"
+
+[node name="SliderPosicion" type="HSlider" parent="HBox/PanelControl"]
+layout_mode = 2
+min_value = 0.0
+max_value = 180.0
+step = 1.0
+value = 90.0
+
+[node name="Separador4" type="HSeparator" parent="HBox/PanelControl"]
+layout_mode = 2
+
+[node name="BotonRutina" type="Button" parent="HBox/PanelControl"]
+layout_mode = 2
+text = "Iniciar rutina"
+
+[node name="BotonDetener" type="Button" parent="HBox/PanelControl"]
+layout_mode = 2
+disabled = true
+text = "Detener"
+
+[node name="Log" type="Label" parent="HBox/PanelControl"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_colors/font_color = Color(0.65, 0.70, 0.78, 1)
+theme_override_font_sizes/font_size = 13
+text = "Listo."
+autowrap_mode = 3

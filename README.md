@@ -46,6 +46,12 @@ movimiento y la lógica de detección, de modo que la situación se reconozca si
 
 ---
 
+## Demostracion
+
+Una demostracion del sistema funcionando se encuentra en: <https://youtu.be/7UaZ5ICe5jY>
+
+---
+
 ## Estructura del repositorio
 
 ```
@@ -61,7 +67,13 @@ movimiento y la lógica de detección, de modo que la situación se reconozca si
 │   └── 05-comunicacion-serial-bidireccional.md
 ├── platformio.ini            Configuración de PlatformIO (Nano, bootloader 57600)
 ├── src/main.cpp              Firmware del Arduino (A0 potenciómetro, D4 servo)
-└── game/                     Proyecto de Godot
+└── game/                     Proyecto de Godot (4.7)
+    ├── project.godot         Escena principal: scenes/radar.tscn
+    ├── scenes/radar.tscn     Escena del laboratorio
+    ├── scripts/
+    │   ├── serial_link.gd    Enlace serial y parser de los reportes S:
+    │   ├── radar_control.gd  Mando manual, rutina y cancelación
+    │   └── radar_display.gd  Dibujo del radar y detección de blancos
     └── addons/gdserial/      Addon de comunicación serial (MIT)
 ```
 
@@ -146,6 +158,7 @@ defecto) si se llama sin datos. La lectura solo es no bloqueante cuando se consu
 | Placa | Arduino Nano (ATmega328P, 5 V / 16 MHz) |
 | Potenciómetro | `A0` |
 | Servomotor | `D4` |
+| Sentido de la salida del servo | **Invertido** (`INVERTIR_SALIDA_SERVO = true`): se escribe 180 − ángulo. El potenciómetro y los reportes `S:` no cambian |
 | Periodo de control | 20 ms (50 Hz) |
 | Periodo de reporte | 100 ms (10 Hz) |
 | Velocidad máxima de giro | 360 °/s (configurable) |
@@ -188,11 +201,15 @@ oscilación aparece de inmediato y es fácil de detectar.
 
 ### Representación digital (Godot)
 
-- [ ] Escena que simula la situación 7 y se reconoce sin explicación.
-- [ ] La variable se actualiza automáticamente con cada reporte `S:`.
-- [ ] Mando digital que se envía automáticamente como comando `A:`.
-- [ ] Lectura del puerto con GdSerial **sin bloquear el hilo principal**.
-- [ ] Las actualizaciones recibidas **no se reenvían** como comandos.
+- [x] Escena que simula la situación 7 y se reconoce sin explicación.
+- [x] La variable se actualiza automáticamente con cada reporte `S:`.
+- [x] Mando digital que se envía automáticamente como comando `A:`.
+- [x] Lectura del puerto con GdSerial **sin bloquear el hilo principal**.
+- [x] Las actualizaciones recibidas **no se reenvían** como comandos.
+- [x] Rutina automática que se cancela cuando el potenciómetro toma el mando.
+
+> Pendiente de verificar en el montaje: la cancelación de la rutina por movimiento físico del
+> potenciómetro (requiere girarlo a mano durante la rutina).
 
 ### Política de arbitraje
 
@@ -258,16 +275,41 @@ Mientras el monitor esté abierto, el puerto queda ocupado y Godot no podrá abr
 
 ### Escena de Godot
 
-*Pendiente.* Cuando la escena esté lista, esta sección documentará:
+```bash
+godot --path game          # o abrir game/project.godot en el editor y F5
+```
 
-1. Copia de `addons/gdserial/` al proyecto y activación en
-   **Project → Project Settings → Plugins**.
-2. Selección del puerto en el inspector (`/dev/ttyUSB0` o `/dev/ttyACM0` en Linux, `COM3` en
-   Windows).
-3. Permisos del puerto en Linux: el usuario debe pertenecer al grupo `dialout`.
-4. Verificación de ambos flujos y de la política de arbitraje.
+Al arrancar, la escena intenta conectarse al primer puerto USB/ACM que encuentre y lo muestra
+en el campo de texto; si falla, se indica el motivo y se puede escribir el puerto a mano.
+
+| Control | Función |
+| --- | --- |
+| Puerto + **Conectar** | Abre o cierra el enlace con GdSerial |
+| Deslizador 0–180° | Mando digital manual: envía `A:` (máximo ~25 comandos/s) |
+| **Iniciar rutina** | Barrido automático entre 10° y 170°, 3° cada 50 ms (60 °/s) |
+| **Detener** | Cancela la rutina |
+| Radar | **Semicírculo** con el centro en la base: refleja siempre el ángulo reportado y los blancos se mueven dentro del arco; solo se iluminan cuando el haz pasa por su azimut |
+
+Reglas de comportamiento:
+
+- **La escena sigue al servo, no al revés.** El deslizador y el radar se actualizan con cada
+  reporte `S:`, venga el mando del potenciómetro o de la escena.
+- **Sin reenvíos.** Las actualizaciones recibidas se aplican con `set_value_no_signal()`, así
+  que no generan comandos `A:`.
+- **La rutina se cancela** cuando (a) llega un reporte `POT`, es decir, el potenciómetro tomó
+  el mando; (b) el usuario mueve el deslizador; (c) se pulsa *Detener*; o (d) se cae la
+  conexión. En (a) hay una ventana de gracia de 0,5 s al inicio para no confundir un reporte
+  `POT` rezagado con un movimiento real.
+- **Mapeo de la situación:** los 0–180° del servo se reparten en un **arco de -90° a +90°**
+  con el centro en la base del control: 0° del servo queda a la izquierda, 90° arriba y 180°
+  a la derecha. Los blancos rebotan en los extremos del arco, así que un blanco fuera del
+  sector de barrido simplemente no se detecta.
+
+En Linux el usuario debe pertenecer al grupo `dialout` para abrir el puerto.
 
 > El addon y el firmware deben usar la **misma velocidad** (9600 baudios en este laboratorio).
+> La escena anterior del curso (`game/scenes/root.tscn`) sigue en el proyecto, pero ya no es la
+> escena principal.
 
 ---
 
