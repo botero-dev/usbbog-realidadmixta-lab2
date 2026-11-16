@@ -1,464 +1,284 @@
-// Author: Andrés Botero
-
-// Select output mode by uncommenting one of the following
-
-
-// FUNCIONANDO OK
-
-// Text format compatible with teleplot. each variable is written as `>VAR:VALUE\n` 
-//#define SEND_STATE_DEBUG
-
-// Communicates inputs as USB HID device.
-#define SEND_STATE_USB
-
-// Writes data into JSON objects. Delimits each message with `\r\n`
-//#define SEND_STATE_JSON
-
-
-// NO IMPLEMENTADOS TODAVIA
-
-// Basic text output in format A0 B1 C0 D1 X234 Y221
-// #define SEND_STATE_TEXT
-
-// Compact serialization format. consists on a header and raw bytes of data.
-// #define SEND_STATE_BINARY
-
-
-// Tasa de envio fija (ms entre muestras). Descomentar para comparar los
-// protocolos en igualdad de condiciones; si queda comentado, se envia en cada
-// vuelta del loop (la tasa la fija la velocidad del bucle).
-//#define SEND_EVERY_MS 5
-
-// Latido de medicion para USB HID: alterna un boton no usado en cada reporte
-// para que el kernel entregue todos (los reportes identicos pueden no generar
-// evento). Solo para medir; no afecta a los 4 botones del juego.
-#define HID_HEARTBEAT
+// ===========================================================================
+//  Laboratorio de clase — Gemelo digital con servomotor
+//  Situación 7: radar de vigilancia
+//
+//  Placa: Arduino Nano (ATmega328P, 5 V / 16 MHz)
+//
+//  Mando físico:  potenciómetro en A0
+//  Actuador:      servomotor en D4 (señal de control)
+//
+//  Enlace serial (9600 baudios, 8N1, mensajes terminados en '\n'):
+//      Godot  -> Arduino : "A:<angulo>\n"           ángulo 0..180
+//      Arduino -> Godot : "S:<angulo>,<fuente>\n"   fuente POT | DIG
+//
+//  El ciclo principal no usa delay(): todo se temporiza con millis().
+// ===========================================================================
 
 #include <Arduino.h>
+#include <Servo.h>
 
-#ifdef SEND_STATE_USB
-#include <HID.h>
-#endif
+/* -------------------------------- Pines --------------------------------- */
 
-/* ----------------------------- Configuracion ----------------------------- */
+const uint8_t PIN_POT   = A0;   // mando físico
+const uint8_t PIN_SERVO = 4;    // D4
 
-// Pines de las entradas digitales, en el orden en que se reportan.
+/* ---------------------------- Calibración -------------------------------- */
 
+// Rango del ADC que corresponde al recorrido útil del potenciómetro.
+// Con el potenciómetro conectado entre 5 V y GND el recorrido completo es
+// 0..1023; si el montaje no llega a los extremos, se ajustan estos valores
+// para que el servo use todo su recorrido sin pegar contra los topes.
+const int POT_ADC_MIN = 0;
+const int POT_ADC_MAX = 1023;
 
+// Muestras promediadas por lectura. Con el servo en movimiento la rail de 5 V
+// se ensucia y una sola conversión puede desviarse varios grados; promediar 8
+// reduce el ruido aleatorio en un factor ~raiz(8) ≈ 2,8 sin costo apreciable
+// (8 conversiones ≈ 0,9 ms cada 20 ms).
+const uint8_t MUESTRAS_POT = 8;
 
-// Nombres de los botones (pin fisico en el Pro Micro).
-#define BTN_FACE_NORTH 6
-#define BTN_FACE_EAST  7
-#define BTN_FACE_SOUTH 9
-#define BTN_STICK_LEFT 5
+const int ANGULO_MIN = 0;
+const int ANGULO_MAX = 180;
 
-// Orden de lectura de los botones (coincide con los nombres de arriba).
-const uint8_t DIGITAL_PINS[] = {
-	BTN_FACE_NORTH,
-	BTN_FACE_EAST,
-	BTN_FACE_SOUTH,
-	BTN_STICK_LEFT,
-};
+/* ----------------------------- Temporización ----------------------------- */
 
+// Muestreo del potenciómetro y avance del servo. 20 ms = 50 Hz: suficiente
+// para que el movimiento se vea continuo y para reaccionar al mando digital.
+const uint16_t PERIODO_CONTROL_MS = 20;
 
+// Reporte de estado. 100 ms = 10 reportes/s: deja ver los ángulos intermedios
+// del movimiento progresivo (a 360 °/s son ~36° entre reportes) y ocupa poco
+// enlace (10 bytes por mensaje ≈ 10,4 ms a 9600 baudios, ~10 % del tiempo).
+const uint16_t PERIODO_REPORTE_MS = 100;
 
-const uint8_t NUM_DIGITAL = sizeof(DIGITAL_PINS) / sizeof(DIGITAL_PINS[0]);
+// Velocidad máxima de giro. El SG90 tarda ~0,1 s por 60° (≈600 °/s), así que
+// 360 °/s queda por debajo del límite físico: el perfil se cumple de verdad.
+const float VELOCIDAD_MAX_DEG_S = 360.0f;
 
-// Pines de las entradas analogicas, en el orden en que se reportan.
-const uint8_t ANALOG_PINS[] = {A2, A3};
-const uint8_t NUM_ANALOG = sizeof(ANALOG_PINS) / sizeof(ANALOG_PINS[0]);
+/* ------------------------------- Arbitraje ------------------------------- */
 
-// Botones cableados de pin a GND => pull-up interno: 1 en reposo, 0 al pulsar.
-// Si en cambio se cablean a VCC (activo alto, con resistencia a GND por medio),
-// poner false para no pelear con la resistencia externa.
-const bool USE_INTERNAL_PULLUP = true;
+// Política "último mando que actúa gana", con histéresis en el potenciómetro:
+//   - Un comando A: válido fija el objetivo y la fuente DIG.
+//   - El potenciómetro recupera el mando cuando se aparta de su posición de
+//     referencia (la que tenía al llegar el comando) más que esta histéresis.
+// Umbral para que el potenciómetro retome el mando cuando lo tiene el digital.
+// Se midió en el montaje: con el servo quieto la lectura es estable, pero
+// mientras gira aparecen desviaciones de varios grados, así que el umbral es
+// amplio (5°) y además la retoma debe sostenerse varios ciclos seguidos.
+const int HISTERESIS_RETOMA_DEG = 5;
 
-// Velocidad del puerto serie.
-const unsigned long SERIAL_BAUD = 115200;
+// Umbral para seguir al potenciómetro cuando ya tiene el mando. No puede ser
+// 0 ni 1: con umbral de 1° cualquier variación de una décima hace que el servo
+// haga una corrección, esa corriente ensucia la lectura y se realimenta el
+// ruido (se midió una oscilación de ±4,5° con el potenciómetro quieto). Con 2°
+// el servo queda quieto y la lectura se estabiliza.
+const int UMBRAL_SEGUIMIENTO_DEG = 2;
 
+// Ciclos consecutivos (20 ms cada uno) que el potenciómetro debe mantenerse
+// fuera del umbral antes de retomar el mando: descarta picos aislados.
+const uint8_t TICS_CONFIRMACION = 3;
 
-/* ------------------------------- Variables ------------------------------- */
+/* -------------------------------- Serial --------------------------------- */
 
-unsigned long lastSampleMs = 0;
+const unsigned long SERIAL_BAUD = 9600;
 
-struct State {
-	unsigned long timestamp;
-	bool btns[NUM_DIGITAL];
-	int16_t axes[NUM_ANALOG];
-};
+// "A:180\n" son 6 caracteres; 16 deja margen y acota el búfer.
+const uint8_t MAX_LINEA = 16;
 
-#define NUM_STATES 2
-State states[NUM_STATES];
+/* -------------------------------- Estado --------------------------------- */
 
-unsigned long frame = 0;
+enum Fuente : uint8_t { FUENTE_POT = 0, FUENTE_DIG = 1 };
 
+Servo servo;
 
-#ifdef SEND_STATE_USB
-void usb_init();
-void send_state_usb(State* state);
-#endif
+int potActual = 90;        // última lectura convertida a grados
+int potAncla = 90;         // referencia para la retoma del mando físico
+int anguloObjetivo = 90;   // a dónde debe llegar el servo
+float anguloOrdenado = 90.0f;  // ángulo que se está ordenando ahora mismo
+Fuente fuente = FUENTE_POT;
 
+unsigned long tControl = 0;
+unsigned long tReporte = 0;
 
-/* -------------------------------- Helpers -------------------------------- */
+char linea[MAX_LINEA];
+uint8_t nLinea = 0;
+bool lineaDescartada = false;
 
-// Lee y descarta lo que el host envie por el puerto serie (CDC), para que el
-// buffer de entrada no se llene. Acotado para no bloquear el loop si el host
-// transmite sin parar.
-void discard_serial_input() {
-	for (uint16_t i = 0; i < 128 && Serial.available() > 0; i++) {
-		Serial.read();
+uint8_t ticsFueraDeUmbral = 0;   // confirmación de la retoma del mando físico
+
+/* -------------------------------- Utilidades ----------------------------- */
+
+int leerPotenciometro() {
+	uint16_t suma = 0;
+	for (uint8_t i = 0; i < MUESTRAS_POT; i++) {
+		suma += analogRead(PIN_POT);
+	}
+
+	int adc = suma / MUESTRAS_POT;
+	if (adc < POT_ADC_MIN) adc = POT_ADC_MIN;
+	if (adc > POT_ADC_MAX) adc = POT_ADC_MAX;
+
+	long rango = POT_ADC_MAX - POT_ADC_MIN;
+	long grados = (long)(adc - POT_ADC_MIN) * (ANGULO_MAX - ANGULO_MIN);
+
+	if (rango <= 0) return ANGULO_MIN;
+
+	// Redondeo al entero más cercano en lugar de truncar.
+	return ANGULO_MIN + (int)((grados + rango / 2) / rango);
+}
+
+// Acepta exclusivamente "A:<entero 0..180>". Descarta cualquier otra cosa:
+// prefijos ajenos, signos, espacios, texto o valores fuera de rango.
+bool parsearComando(const char *s, int *salida) {
+	if (s[0] != 'A' || s[1] != ':') return false;
+
+	const char *p = s + 2;
+	if (*p == '\0') return false;
+
+	int valor = 0;
+	uint8_t digitos = 0;
+
+	while (*p != '\0') {
+		if (*p < '0' || *p > '9') return false;
+
+		valor = valor * 10 + (*p - '0');
+		if (valor > ANGULO_MAX) return false;   // corta 181, 200, 1000...
+		if (++digitos > 3) return false;
+
+		p++;
+	}
+
+	*salida = valor;
+	return true;
+}
+
+void aplicarComandoDigital(int angulo) {
+	anguloObjetivo = angulo;
+	fuente = FUENTE_DIG;
+	// Ancla: la posición del potenciómetro en este instante. Para recuperar
+	// el mando físico habrá que moverlo más que la histéresis desde aquí,
+	// y sostenerlo varios ciclos seguidos.
+	potAncla = potActual;
+	ticsFueraDeUmbral = 0;
+}
+
+/* ------------------------------ Control ---------------------------------- */
+
+void actualizarControl(unsigned long ahora) {
+	potActual = leerPotenciometro();
+
+	if (fuente == FUENTE_POT) {
+		// El mando físico manda mientras se mueva; si está quieto se conserva
+		// el último objetivo para no temblar con el ruido.
+		if (abs(potActual - anguloObjetivo) >= UMBRAL_SEGUIMIENTO_DEG) {
+			anguloObjetivo = potActual;
+		}
+		potAncla = potActual;
+	} else if (abs(potActual - potAncla) >= HISTERESIS_RETOMA_DEG) {
+		// Movimiento sostenido del potenciómetro: retoma el mando.
+		if (++ticsFueraDeUmbral >= TICS_CONFIRMACION) {
+			fuente = FUENTE_POT;
+			anguloObjetivo = potActual;
+			potAncla = potActual;
+			ticsFueraDeUmbral = 0;
+		}
+	} else {
+		ticsFueraDeUmbral = 0;
+	}
+
+	// Avance progresivo hacia el objetivo (limitador de velocidad).
+	float dt = (ahora - tControl) / 1000.0f;
+	if (dt > 0.1f) dt = 0.1f;   // si el ciclo se retrasó, no dar un salto
+
+	float pasoMax = VELOCIDAD_MAX_DEG_S * dt;
+	float error = anguloObjetivo - anguloOrdenado;
+
+	if (fabs(error) <= pasoMax) {
+		anguloOrdenado = anguloObjetivo;
+	} else {
+		anguloOrdenado += (error > 0.0f) ? pasoMax : -pasoMax;
+	}
+
+	servo.write((int)(anguloOrdenado + 0.5f));
+}
+
+/* ------------------------------- Serial ---------------------------------- */
+
+// Recibe y procesa todo lo disponible sin esperar a nadie. Solo se interpreta
+// un mensaje cuando llega el '\n': los fragmentos quedan en el búfer.
+void atenderSerial() {
+	while (Serial.available() > 0) {
+		char c = (char)Serial.read();
+
+		if (c == '\n') {
+			if (!lineaDescartada && nLinea > 0) {
+				linea[nLinea] = '\0';
+				int angulo;
+				if (parsearComando(linea, &angulo)) {
+					aplicarComandoDigital(angulo);
+				}
+			}
+			nLinea = 0;
+			lineaDescartada = false;
+		} else if (c != '\r') {
+			if (nLinea < MAX_LINEA - 1) {
+				linea[nLinea++] = c;
+			} else {
+				lineaDescartada = true;   // línea demasiado larga: se tira
+				nLinea = 0;
+			}
+		}
 	}
 }
 
+void enviarReporte() {
+	int angulo = (int)(anguloOrdenado + 0.5f);
 
-/* --------------------------------- Setup --------------------------------- */
+	Serial.print(F("S:"));
+	Serial.print(angulo);
+	Serial.print(',');
+	Serial.print(fuente == FUENTE_POT ? F("POT") : F("DIG"));
+	Serial.write('\n');
+}
+
+/* -------------------------------- Setup ---------------------------------- */
 
 void setup() {
 	Serial.begin(SERIAL_BAUD);
 
-	for (uint8_t i = 0; i < NUM_DIGITAL; i++) {
-		pinMode(DIGITAL_PINS[i], INPUT_PULLUP);
-	}
+	pinMode(PIN_POT, INPUT);
+	servo.attach(PIN_SERVO);
 
-	for (uint8_t i = 0; i < NUM_ANALOG; i++) {
-		pinMode(ANALOG_PINS[i], INPUT);
-	}
+	// Arrancar en la posición del mando físico evita un salto al energizar.
+	potActual = leerPotenciometro();
+	potAncla = potActual;
+	anguloObjetivo = potActual;
+	anguloOrdenado = (float)potActual;
+	servo.write(potActual);
 
-
-#ifdef SEND_STATE_USB
-	usb_init();
-#endif
+	tControl = millis();
+	tReporte = tControl;
 }
 
-
-void send_state_text(State* state) {
-	
-	// packet format example:
-	// T12345678 A0 B1 C0 X123 Y456 <new line>
-	// 
-	// where
-	// T is header for timestamp (microseconds since startup)
-	// A, B, C are specific buttons, and 0/1 means pressed/released
-	// X123 means value 123 for X axis
-	// analog values are in range 0-1023, with no calibration
-
-	Serial.print('T');
-	Serial.print(state->timestamp);
-	Serial.print(' ');
-
-	unsigned char A = 0;
-
-	for (uint8_t i = 0; i < NUM_DIGITAL; i++) {
-		char btn_name = 'A' + i;
-		Serial.print(btn_name);
-		Serial.print(state->btns[i]);
-		Serial.print(' ');
-	}
-
-
-	
-	for (uint8_t i = 0; i < NUM_ANALOG; i++) {
-		char axis_name = 'X' + i;
-		short axis_value = state->axes[i];
-		Serial.print(axis_name);
-		Serial.print(axis_value);
-		Serial.print(' ');
-	}
-
-	Serial.print('\n');
-}
-
-// format that teleplot uses to draw plots
-void send_state_debug(State* state) {
-
-	Serial.print(">T:");
-	Serial.print(state->timestamp);
-	Serial.println();
-	
-	unsigned char A = 0;
-
-	for (uint8_t i = 0; i < NUM_DIGITAL; i++) {
-		char btn_name = 'A' + i;
-		Serial.print('>');
-		Serial.print(btn_name);
-		Serial.print(':');
-		Serial.print(state->btns[i]);
-		Serial.println();
-	}
-
-
-	
-	for (uint8_t i = 0; i < NUM_ANALOG; i++) {
-		char axis_name = 'X' + i;
-		short axis_value = state->axes[i];
-		Serial.print('>');
-		Serial.print(axis_name);
-		Serial.print(':');
-		Serial.print(axis_value);
-		Serial.println();
-	}
-
-}
-
-void send_state_binary(State* state) {
-	
-	// packet format:
-	// 01234567890123456
-	// DATA ABBCC
-	// where
-	// DATA -> Fixed string header
-	// A -> 8 bit value but only 3 bits used for button values in least significant bits
-	// BB -> signed 16 bit X axis value, only 10 significant bits.
-	// CC -> signed 16 bit Y axis value, only 10 significant bits. 
-
-	// we use "write" to send raw bytes instead of converting to string
-	Serial.write("DATA ");
-
-	unsigned char A = 0;
-
-	for (uint8_t i = 0; i < NUM_DIGITAL; i++) {
-		A = A | (state->btns[i] << i);
-	}
-	Serial.print(A);
-
-	
-	for (uint8_t i = 0; i < NUM_ANALOG; i++) {
-		short BB = state->axes[i] - 511;
-		Serial.write(BB);
-	}
-}
-
-// Serializa el estado como un objeto JSON por linea, delimitado por '\r\n'.
-// Ejemplo: {"T":123456,"A":0,"B":1,"C":0,"D":1,"X":520,"Y":509}
-// Todos los valores son enteros, por lo que no requieren escapado.
-void send_state_json(State* state) {
-
-	Serial.print(F("{\"T\":"));
-	Serial.print(state->timestamp);
-
-	for (uint8_t i = 0; i < NUM_DIGITAL; i++) {
-		char btn_name = 'A' + i;
-		Serial.print(F(",\""));
-		Serial.print(btn_name);
-		Serial.print(F("\":"));
-		Serial.print(state->btns[i] ? 1 : 0);
-	}
-
-	for (uint8_t i = 0; i < NUM_ANALOG; i++) {
-		char axis_name = 'X' + i;
-		Serial.print(F(",\""));
-		Serial.print(axis_name);
-		Serial.print(F("\":"));
-		Serial.print(state->axes[i]);
-	}
-
-	// Cierra el objeto y agrega CRLF como delimitador entre mensajes.
-	Serial.println('}');
-}
+/* --------------------------------- Loop ---------------------------------- */
 
 void loop() {
+	atenderSerial();
 
-	// El firmware no usa datos entrantes: los descartamos.
-	discard_serial_input();
+	unsigned long ahora = millis();
 
-	State* state = &states[frame % NUM_STATES]; 
-	// Entradas digitales -> "d5", "d6", "d7", "d9" ...
-	for (uint8_t i = 0; i < NUM_DIGITAL; i++) {
-		bool value = !digitalRead(DIGITAL_PINS[i]); // flipped condition because pin is default_pullup
-		state->btns[i] = value;
+	if (ahora - tControl >= PERIODO_CONTROL_MS) {
+		// tControl todavía guarda el instante del tick anterior: de ahí sale
+		// el dt que usa actualizarControl() para el avance progresivo.
+		actualizarControl(ahora);
+		tControl = ahora;
 	}
 
-	for (uint8_t i = 0; i < NUM_ANALOG; i++) {
-		int16_t value = analogRead(ANALOG_PINS[i]);
-		state->axes[i] = value;
+	if (ahora - tReporte >= PERIODO_REPORTE_MS) {
+		tReporte = ahora;
+		// En el Nano (serial por hardware) la condición siempre es verdadera.
+		// En placas con USB nativo evita escribir si el host no abrió el puerto,
+		// que es cuando la escritura podría quedarse esperando.
+		if (Serial) enviarReporte();
 	}
-
-	State* old_state = &states[(frame+NUM_STATES-1)%NUM_STATES];
-
-
-
-	
-	const int16_t THRESHOLD = 0;
-
-	// noise reduction: snap values to previous value if delta is <= threshold
-	for (uint8_t i = 0; i < NUM_ANALOG; i++) {
-		int16_t delta = state->axes[i] - old_state->axes[i];
-		if (delta < 0) {
-			delta = -delta;
-		}
-
-		if (delta <= THRESHOLD) {
-			state->axes[i] = old_state->axes[i];
-		}
-	}
-
-
-	// Condicion de envio. Sin SEND_EVERY_MS se envia en cada vuelta del loop
-	// (la tasa la fija el bucle). Con SEND_EVERY_MS se envia a una tasa fija.
-#ifdef SEND_EVERY_MS
-	static unsigned long lastSendMs = 0;
-	unsigned long nowMs = millis();
-	bool due = (nowMs - lastSendMs) >= SEND_EVERY_MS;
-	if (due) {
-		lastSendMs = nowMs;
-	}
-#else
-	bool due = true;
-#endif
-
-	if (due) {
-		// Marca de tiempo tomada en el instante del envio (para medir la cadencia).
-		state->timestamp = micros();
-#ifdef SEND_STATE_BINARY
-		send_state_binary(state);
-#elif defined(SEND_STATE_TEXT)
-		send_state_text(state);
-#elif defined(SEND_STATE_DEBUG)
-		send_state_debug(state);
-#elif defined(SEND_STATE_JSON)
-		send_state_json(state);
-#elif defined(SEND_STATE_USB)
-		send_state_usb(state);
-#else
-		error - no SEND_STATE_XXX constant set.
-#endif
-	}
-
-
-	frame += 1;
-
 }
-
-
-
-
-/* ------------------------------ Modo USB HID ----------------------------- */
-/*
- *  Con SEND_STATE_USB el Pro Micro se presenta al host como un gamepad HID
- *  (ademas del puerto serie CDC, ya que la placa soporta dispositivo compuesto).
- *
- *  El descriptor de reporte define:
- *    - 16 botones (2 bytes, 1 = pulsado). Solo se usan los usages 1, 2, 4 y 14,
- *      que el kernel expone como BTN_SOUTH, BTN_EAST, BTN_NORTH y BTN_THUMBL.
- *    - eje X y eje Y       (16 bits, valor crudo del ADC: 0..1023)
- *
- *  Se usa el ID de reporte 0x03 para no chocar con 0x01/0x02, reservados por el
- *  core de Arduino para los HID de teclado y raton.
- */
-
-#ifdef SEND_STATE_USB
-
-#define GAMEPAD_REPORT_ID 0x03
-
-// Bit del reporte HID para cada boton estandar (bit = numero de boton HID - 1).
-// El kernel los traduce a: BTN_SOUTH, BTN_EAST, BTN_NORTH y BTN_THUMBL.
-#define HID_BTN_SOUTH  0    // Button 1
-#define HID_BTN_EAST   1    // Button 2
-#define HID_BTN_NORTH  3    // Button 4
-#define HID_BTN_THUMBL 13   // Button 14
-#define HID_BTN_HEARTBEAT 4 // Button 5 (no usado; solo con HID_HEARTBEAT)
-
-// Correspondencia pin -> bit HID, en el orden de DIGITAL_PINS[].
-static const uint8_t USB_BUTTON_BITS[NUM_DIGITAL] = {
-	HID_BTN_NORTH,   // BTN_FACE_NORTH
-	HID_BTN_EAST,    // BTN_FACE_EAST
-	HID_BTN_SOUTH,   // BTN_FACE_SOUTH
-	HID_BTN_THUMBL,  // BTN_STICK_LEFT
-};
-
-static const uint8_t GAMEPAD_REPORT_DESCRIPTOR[] PROGMEM = {
-	0x05, 0x01,               // USAGE_PAGE (Generic Desktop)
-	0x09, 0x05,               // USAGE (Game Pad)
-	0xA1, 0x01,               // COLLECTION (Application)
-	0x85, GAMEPAD_REPORT_ID,  //   REPORT_ID (3)
-	// --- 16 botones (2 bytes) ---
-	0x05, 0x09,               //   USAGE_PAGE (Button)
-	0x19, 0x01,               //   USAGE_MINIMUM (Button 1)
-	0x29, 0x10,               //   USAGE_MAXIMUM (Button 16)
-	0x15, 0x00,               //   LOGICAL_MINIMUM (0)
-	0x25, 0x01,               //   LOGICAL_MAXIMUM (1)
-	0x75, 0x01,               //   REPORT_SIZE (1)
-	0x95, 0x10,               //   REPORT_COUNT (16)
-	0x81, 0x02,               //   INPUT (Data,Var,Abs)
-	// --- Ejes X e Y (16 bits, valor crudo 0..1023) ---
-	0x05, 0x01,               //   USAGE_PAGE (Generic Desktop)
-	0x09, 0x30,               //   USAGE (X)
-	0x09, 0x31,               //   USAGE (Y)
-	0x15, 0x00,               //   LOGICAL_MINIMUM (0)
-	0x26, 0xFF, 0x03,         //   LOGICAL_MAXIMUM (1023)
-	0x75, 0x10,               //   REPORT_SIZE (16)
-	0x95, 0x02,               //   REPORT_COUNT (2)
-	0x81, 0x02,               //   INPUT (Data,Var,Abs)
-	0xC0                      // END_COLLECTION
-};
-
-// Disposicion en memoria del reporte que viaja por el endpoint HID.
-struct __attribute__((packed)) GamepadReport {
-	uint16_t buttons;  // bits 0..15 (ver USB_BUTTON_BITS)
-	uint16_t x;        // eje X (0..1023)
-	uint16_t y;        // eje Y (0..1023)
-};
-
-// Registra el descriptor en el stack USB durante la inicializacion estatica.
-// Es importante que ocurra antes de que el core levante el USB en setup(), para
-// que la interfaz HID forme parte de la enumeracion inicial del host.
-class UsbGamepad {
-public:
-	UsbGamepad() {
-		static HIDSubDescriptor node(GAMEPAD_REPORT_DESCRIPTOR, sizeof(GAMEPAD_REPORT_DESCRIPTOR));
-		HID().AppendDescriptor(&node);
-	}
-};
-
-static UsbGamepad usbGamepad;
-
-
-void usb_init() {
-	// Reporte neutro inicial (botones sueltos, ejes al centro ~512) para que el
-	// host arranque con un estado conocido antes del primer cambio real.
-	const GamepadReport neutral = {0, 512, 512};
-	HID().SendReport(GAMEPAD_REPORT_ID, &neutral, sizeof(neutral));
-
-}
-
-// La lectura ADC ya viene en 0..1023; se recorta por si cambia la resolucion.
-static uint16_t clamp_axis(int16_t adc) {
-	if (adc < 0) return 0;
-	if (adc > 1023) return 1023;
-	return (uint16_t)adc;
-}
-
-// Envia el estado actual como un reporte HID de gamepad.
-void send_state_usb(State* state) {
-	GamepadReport report;
-	report.buttons = 0;
-
-	// Pull-up: 0 == pulsado -> ponemos su bit HID a 1.
-	for (uint8_t i = 0; i < NUM_DIGITAL; i++) {
-		if (!state->btns[i]) {
-			report.buttons |= (uint16_t)(1u << USB_BUTTON_BITS[i]);
-		}
-	}
-
-	report.x = clamp_axis(NUM_ANALOG > 0 ? state->axes[0] : 512);
-	report.y = clamp_axis(NUM_ANALOG > 1 ? state->axes[1] : 512);
-
-	// stick is flipped, so we flip values
-	report.x = 1023 - report.x;
-	report.y = 1023 - report.y;
-
-#ifdef HID_HEARTBEAT
-	// Alterna un boton no usado para que cada reporte cambie y el kernel los
-	// entregue todos (util para medir el ritmo real de reportes).
-	static bool hb = false;
-	hb = !hb;
-	if (hb) {
-		report.buttons |= (uint16_t)(1u << HID_BTN_HEARTBEAT);
-	}
-#endif
-
-	HID().SendReport(GAMEPAD_REPORT_ID, &report, sizeof(report));
-}
-
-#endif  // SEND_STATE_USB
-

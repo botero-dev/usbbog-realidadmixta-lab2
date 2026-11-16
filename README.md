@@ -59,13 +59,14 @@ movimiento y la lógica de detección, de modo que la situación se reconozca si
 │   ├── 03-programacion-no-bloqueante.md
 │   ├── 04-interrupciones.md
 │   └── 05-comunicacion-serial-bidireccional.md
-├── firmware/                 (pendiente) Código del Arduino
-└── godot/                    (pendiente) Proyecto de Godot
+├── platformio.ini            Configuración de PlatformIO (Nano, bootloader 57600)
+├── src/main.cpp              Firmware del Arduino (A0 potenciómetro, D4 servo)
+└── game/                     Proyecto de Godot
     └── addons/gdserial/      Addon de comunicación serial (MIT)
 ```
 
-> **Estado actual:** el repositorio contiene el enunciado, la rúbrica y las guías de lectura.
-> Las carpetas `firmware/` y `godot/` se agregan a medida que avanza el desarrollo.
+> **Estado actual:** el firmware ya implementa el mando físico, el movimiento progresivo, el
+> protocolo serial y la política de arbitraje. La escena de Godot está en desarrollo.
 
 ---
 
@@ -140,13 +141,50 @@ defecto) si se llama sin datos. La lectura solo es no bloqueante cuando se consu
 
 ### Firmware (Arduino)
 
-- [ ] El potenciómetro controla el ángulo del servomotor.
-- [ ] Los comandos `A:` se aplican; los inválidos se descartan sin alterar el estado.
-- [ ] Reporte periódico con periodo **definido y justificado**.
-- [ ] Movimiento progresivo con **velocidad máxima configurable**.
-- [ ] Ciclo principal **sin `delay()`**.
-- [ ] Política de arbitraje entre mando físico y digital.
-- [ ] Parser serial no bloqueante, con validación de prefijo, rango y línea completa.
+| Elemento | Valor |
+| --- | --- |
+| Placa | Arduino Nano (ATmega328P, 5 V / 16 MHz) |
+| Potenciómetro | `A0` |
+| Servomotor | `D4` |
+| Periodo de control | 20 ms (50 Hz) |
+| Periodo de reporte | 100 ms (10 Hz) |
+| Velocidad máxima de giro | 360 °/s (configurable) |
+| Promedio de lectura | 8 muestras del ADC por ciclo |
+| Umbral de seguimiento (mando físico) | 1° |
+| Histéresis de retoma (desde mando digital) | 5°, sostenidos 3 ciclos (60 ms) |
+
+> **Montaje mínimo:** potenciómetro entre 5 V y GND con el cursor en `A0`; servo con la señal
+> en `D4` y alimentación estable (fuente externa con tierra común si el servo reinicia la
+> placa). El rango útil se calibra con `POT_ADC_MIN` / `POT_ADC_MAX` en el firmware. En el
+> Nano, `Servo` ocupa el Timer1: `analogWrite()` deja de funcionar en `D9` y `D10`.
+
+Política de arbitraje implementada: **último mando que actúa gana, con histéresis y
+confirmación temporal**. Un comando `A:` válido fija el objetivo y la fuente `DIG`; el
+potenciómetro retoma el mando cuando se aparta **5° o más** de la posición que tenía al llegar
+el comando **y** se mantiene así **3 ciclos seguidos** (60 ms).
+
+Por qué esos valores:
+
+| Parámetro | Razón |
+| --- | --- |
+| Umbral de seguimiento 2° | Con 1° el servo corrige ante cualquier variación de la lectura y el conjunto entra en una oscilación de ±4,5° con el potenciómetro quieto; con 2° el servo queda quieto. |
+| Promedio de 8 muestras | Reduce el ruido aleatorio del ADC y cuesta ~0,9 ms por ciclo de 20 ms. |
+| Histéresis de retoma 5° + 3 ciclos | Un pico aislado del ADC no puede anular el mando digital; un giro deliberado del potenciómetro supera ambos umbrales en 60 ms. |
+
+Los tres umbrales se validaron en el montaje con comandos `A:` y giros del potenciómetro. Si se
+cambia el potenciómetro o el cableado, conviene repetir la comprobación: con 1° de umbral la
+oscilación aparece de inmediato y es fácil de detectar.
+
+- [x] El potenciómetro controla el ángulo del servomotor.
+- [x] Los comandos `A:` se aplican; los inválidos se descartan sin alterar el estado.
+- [x] Reporte periódico con periodo **definido y justificado**.
+- [x] Movimiento progresivo con **velocidad máxima configurable**.
+- [x] Ciclo principal **sin `delay()`**.
+- [x] Política de arbitraje entre mando físico y digital.
+- [x] Parser serial no bloqueante, con validación de prefijo, rango y línea completa.
+
+> Pendiente: experimento A (error angular con transportador) y verificación de la estabilidad
+> del contacto del potenciómetro en el montaje final.
 
 ### Representación digital (Godot)
 
@@ -197,19 +235,39 @@ Los criterios detallados están en [rubrica.md](./rubrica.md) y el enunciado com
 
 ## Cómo ejecutar
 
-*Pendiente.* Cuando estén disponibles el firmware y la escena, esta sección documentará:
+### Firmware
 
-1. Carga del sketch en el Arduino y verificación del puerto (monitor serial del IDE, o
-   `pio device monitor` si se usa PlatformIO).
-2. Copia de `addons/gdserial/` al proyecto de Godot y activación en
+```bash
+# Compilar
+pio run
+
+# Compilar y subir a la placa
+pio run --target upload --upload-port /dev/ttyUSB0
+
+# Ver los reportes S: a 9600 baudios
+pio device monitor --port /dev/ttyUSB0
+```
+
+- En Windows el puerto se llama `COM3`, `COM4`, … (`pio device list` los muestra).
+- Si `pio` no está en el `PATH` (PlatformIO instalado como extensión de VS Code), el
+  ejecutable está en `~/.platformio/penv/bin/pio`.
+- El `platformio.ini` ya fija la placa y la velocidad del bootloader; no hace falta pasar
+  más opciones.
+
+Mientras el monitor esté abierto, el puerto queda ocupado y Godot no podrá abrirlo.
+
+### Escena de Godot
+
+*Pendiente.* Cuando la escena esté lista, esta sección documentará:
+
+1. Copia de `addons/gdserial/` al proyecto y activación en
    **Project → Project Settings → Plugins**.
-3. Apertura de la escena principal y selección del puerto en el inspector
-   (`/dev/ttyUSB0` o `/dev/ttyACM0` en Linux, `COM3` en Windows).
-4. Permisos del puerto en Linux: el usuario debe pertenecer al grupo `dialout`.
-5. Verificación de ambos flujos y de la política de arbitraje.
+2. Selección del puerto en el inspector (`/dev/ttyUSB0` o `/dev/ttyACM0` en Linux, `COM3` en
+   Windows).
+3. Permisos del puerto en Linux: el usuario debe pertenecer al grupo `dialout`.
+4. Verificación de ambos flujos y de la política de arbitraje.
 
 > El addon y el firmware deben usar la **misma velocidad** (9600 baudios en este laboratorio).
-> Si el monitor serial del IDE tiene el puerto abierto, Godot no podrá abrirlo.
 
 ---
 

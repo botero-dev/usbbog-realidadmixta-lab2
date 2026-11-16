@@ -1,0 +1,8 @@
+# PlatformIO
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Godot
+game/.godot/
+game/export_presets.cfg
