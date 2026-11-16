@@ -75,6 +75,11 @@ Una demostracion del sistema funcionando se encuentra en: <https://youtu.be/7UaZ
     │   ├── radar_control.gd  Mando manual, rutina y cancelación
     │   └── radar_display.gd  Dibujo del radar y detección de blancos
     └── addons/gdserial/      Addon de comunicación serial (MIT)
+└── poster/
+    ├── poster.html           Fuente del póster (A1 vertical)
+    ├── poster.pdf            PDF generado
+    ├── build.sh              Render con Chrome/Chromium headless
+    └── assets/               Logotipo institucional (opcional)
 ```
 
 > **Estado actual:** el firmware ya implementa el mando físico, el movimiento progresivo, el
@@ -310,6 +315,29 @@ En Linux el usuario debe pertenecer al grupo `dialout` para abrir el puerto.
 > El addon y el firmware deben usar la **misma velocidad** (9600 baudios en este laboratorio).
 > La escena anterior del curso (`game/scenes/root.tscn`) sigue en el proyecto, pero ya no es la
 > escena principal.
+
+---
+
+## Póster
+
+```bash
+poster/build.sh                    # busca Chrome/Chromium automáticamente
+CHROME=/ruta/al/chrome poster/build.sh
+```
+
+- Formato A1 vertical (594 × 841 mm) definido con `@page size`, en una sola página.
+- Tipografía sin adornos y tamaños mínimos según el enunciado.
+- Cuatro colores: azul `#003C71`, dorado `#C9A227`, tinta `#14213D` y blanco.
+- Cada bloque de texto queda por debajo de las 10 líneas y las figuras y tablas llevan
+  título, como pide el enunciado.
+- **Logotipo:** `poster/assets/logo_usb.jpg` (2560 × 997 px), dibujado a 44 mm de alto en el
+  extremo derecho del encabezado. Si el archivo no existe, el encabezado muestra un recuadro
+  con el nombre de la universidad, así que el PDF se puede generar igual.
+- **Tipografía:** fuente sin adornos (Liberation Sans, métrica de Arial) y los tamaños mínimos
+  del enunciado: título 54 pt, subtítulos 48 pt, autores y filiación 30 pt, texto 28 pt, pies de
+  figura 24 pt. La familia y los tamaños están centralizados en las variables de `:root`.
+- **Pendiente:** reemplazar los nombres de los integrantes y completar las tablas 2 y 3 con los
+  datos de los experimentos A y B.
 
 ---
 

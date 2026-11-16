@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Póster — Gemelo digital de un radar de vigilancia</title>
+<style>
+  @page { size: 594mm 841mm; margin: 0; }
+
+  :root {
+    --azul: #003C71;
+    --dorado: #C9A227;
+    --tinta: #14213D;
+    --blanco: #FFFFFF;
+
+    /* Tipografía y espaciado en un solo lugar. Fuente sin adornos y tamaños
+       mínimos del enunciado: título 54, subtítulos 48, autores y filiación 30,
+       texto 28, pies de figura 24. */
+    --fuente: "Liberation Sans", Arial, Helvetica, "DejaVu Sans", sans-serif;
+    --tam-titulo: 54pt;
+    --tam-subtitulo: 48pt;
+    --tam-texto: 28pt;
+    --tam-autor: 30pt;
+    --tam-filiacion: 30pt;
+    --tam-pie-figura: 24pt;
+    --separacion-columnas: 9mm;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--blanco);
+    color: var(--tinta);
+    font-family: var(--fuente);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .pagina {
+    width: 594mm;
+    height: 841mm;
+    padding: 12mm 15mm 4mm;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ---------------------------- Encabezado ---------------------------- */
+
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10mm;
+    border-bottom: 3mm solid var(--azul);
+    padding-bottom: 5mm;
+    margin-bottom: 6mm;
+  }
+
+  h1 {
+    font-size: var(--tam-titulo);
+    line-height: 1.05;
+    font-weight: 700;
+    color: var(--azul);
+    margin: 0 0 3mm 0;
+  }
+
+  .autores {
+    font-size: var(--tam-autor);
+    font-weight: 700;
+    margin: 0;
+  }
+
+  .filiacion {
+    font-size: var(--tam-filiacion);
+    margin: 1mm 0 0 0;
+  }
+
+  .marca { text-align: right; flex: 0 0 auto; }
+  .marca img { height: 44mm; display: block; margin-left: auto; }
+
+  body.sin-logo .marca img { display: none; }
+
+  .marca-texto {
+    display: none;
+    border: 1.2mm solid var(--azul);
+    border-radius: 3mm;
+    padding: 3mm 5mm;
+    text-align: center;
+    color: var(--azul);
+  }
+
+  body.sin-logo .marca-texto { display: block; }
+
+  .marca-texto strong {
+    display: block;
+    font-size: 30pt;
+    line-height: 1.05;
+    letter-spacing: 0.5mm;
+  }
+
+  .marca-texto span {
+    display: block;
+    font-size: var(--tam-pie-figura);
+    color: var(--tinta);
+    margin-top: 1mm;
+  }
+
+  /* ----------------------------- Columnas ----------------------------- */
+
+  .columnas {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: var(--separacion-columnas);
+    flex: 1 1 auto;
+  }
+
+  .col {
+    display: flex;
+    flex-direction: column;
+    gap: 5mm;
+  }
+
+  section { break-inside: avoid; }
+
+  h2 {
+    font-size: var(--tam-subtitulo);
+    line-height: 1.05;
+    font-weight: 700;
+    color: var(--azul);
+    margin: 0 0 2mm 0;
+    padding-left: 4mm;
+    border-left: 2.5mm solid var(--dorado);
+  }
+
+  p {
+    font-size: var(--tam-texto);
+    line-height: 1.16;
+    margin: 0 0 2mm 0;
+    text-align: justify;
+    hyphens: auto;
+    -webkit-hyphens: auto;
+  }
+
+  p:last-child { margin-bottom: 0; }
+
+  em { font-style: italic; }
+  strong { font-weight: 700; }
+
+  .destacado {
+    border-left: 2mm solid var(--azul);
+    padding: 3mm 0 3mm 4mm;
+    background: rgba(0, 60, 113, 0.05);
+  }
+
+  /* ------------------------------ Figuras ----------------------------- */
+
+  figure { margin: 0; }
+  figure svg { width: 100%; height: auto; display: block; }
+  figure svg text { font-family: var(--fuente); }
+
+  figcaption {
+    font-size: var(--tam-pie-figura);
+    line-height: 1.12;
+    font-style: italic;
+    margin-top: 1.5mm;
+  }
+
+  /* ------------------------------ Tablas ------------------------------ */
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--tam-texto);
+    line-height: 1.05;
+  }
+
+  caption {
+    font-size: var(--tam-pie-figura);
+    font-style: italic;
+    text-align: left;
+    margin-bottom: 1.5mm;
+  }
+
+  th, td {
+    border: 0.4mm solid var(--azul);
+    padding: 0.55mm 1.2mm;
+    text-align: center;
+  }
+
+  th {
+    background: var(--azul);
+    color: var(--blanco);
+    font-weight: 700;
+  }
+
+  .nota {
+    font-size: var(--tam-pie-figura);
+    font-style: italic;
+    margin-top: 1.5mm;
+  }
+
+  /* ---------------------------- Referencias --------------------------- */
+
+  .referencias p {
+    font-size: var(--tam-pie-figura);
+    text-align: left;
+    text-indent: -5mm;
+    padding-left: 5mm;
+    line-height: 1.12;
+    margin-bottom: 1.5mm;
+  }
+
+  .params th:nth-child(1), .params td:nth-child(1) { width: 33%; }
+  .params th:nth-child(2), .params td:nth-child(2) { width: 17%; }
+  .params th:nth-child(3), .params td:nth-child(3) { width: 50%; }
+
+  .pie {
+    margin-top: 1.5mm;
+    border-top: 1.2mm solid var(--azul);
+    padding-top: 1mm;
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--tam-pie-figura);
+  }
+</style>
+</head>
+<body>
+<div class="pagina">
+
+  <header>
+    <div>
+      <h1>Gemelo digital de un radar de vigilancia</h1>
+      <p class="autores">[Integrante 1] · [Integrante 2] · [Integrante 3]</p>
+      <p class="filiacion">Universidad de San Buenaventura · Facultad de Ingeniería · Bogotá<br>
+      Laboratorio de clase — Realidad Mixta</p>
+    </div>
+    <div class="marca">
+      <img id="logo-usb" src="assets/logo_usb.jpg" alt="Universidad de San Buenaventura">
+      <div class="marca-texto">
+        <strong>UNIVERSIDAD DE<br>SAN BUENAVENTURA</strong>
+        <span>Facultad de Ingeniería · Bogotá</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="columnas">
+
+    <!-- ============================ COLUMNA 1 ============================ -->
+    <div class="col">
+
+      <section>
+        <h2>1. Introducción y objetivo</h2>
+        <p>Una representación solo es un <strong>gemelo digital</strong> si intercambia datos de
+        forma automática con el objeto físico en los dos sentidos. Este trabajo cierra ese lazo
+        para la situación 7: un radar de vigilancia cuyo ángulo de antena es el del servomotor.</p>
+        <p>El objetivo es medir el error angular entre el servo y su representación y comprobar
+        que ambos lados mantienen un estado coherente cuando cualquiera de los dos puede tomar el
+        mando. La pregunta que guía el trabajo es qué condiciones debe cumplir esa relación para
+        considerarse un gemelo digital.</p>
+      </section>
+
+      <section>
+        <h2>2. Modelo, sombra y gemelo</h2>
+        <p>Kritzinger et al. clasifican según quién cierra el lazo: en el <em>modelo digital</em>
+        ambos flujos son manuales; en la <em>sombra digital</em> el flujo físico&nbsp;→&nbsp;digital
+        es automático y el inverso manual; en el <em>gemelo digital</em> ambos son automáticos. El
+        criterio no es la existencia de un modelo 3D, sino el grado de integración de datos. Con
+        esa definición, este sistema es un gemelo digital.</p>
+      </section>
+
+      <section>
+        <h2>3. Servomotor y lectura del mando</h2>
+        <p>Un servo de posición integra motor, reductor, potenciómetro y controlador en un lazo
+        cerrado: la orden es el ancho de un pulso de 1 a 2&nbsp;ms repetido cada 20&nbsp;ms. La
+        librería <em>Servo</em> ocupa el Timer1 del ATmega328P, así que se pierde
+        <em>analogWrite()</em> en D9 y D10.</p>
+        <p>Cada lectura del potenciómetro promedia ocho muestras del ADC, porque el consumo del
+        servo desvía la lectura varios grados.</p>
+      </section>
+
+      <section>
+        <h2>4. Arquitectura del sistema</h2>
+        <figure>
+          <svg viewBox="0 0 800 350" role="img" aria-label="Diagrama de arquitectura">
+            <defs>
+              <marker id="fl1" viewBox="0 0 10 10" refX="9" refY="5"
+                      markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#003C71"/>
+              </marker>
+              <marker id="fl1d" viewBox="0 0 10 10" refX="9" refY="5"
+                      markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#C9A227"/>
+              </marker>
+            </defs>
+
+            <rect x="8" y="10" width="200" height="86" rx="10"
+                  fill="#FFFFFF" stroke="#003C71" stroke-width="4"/>
+            <text x="108" y="50" text-anchor="middle" font-size="27" font-weight="bold"
+                  fill="#14213D">Potenciómetro</text>
+            <text x="108" y="80" text-anchor="middle" font-size="24" fill="#003C71">A0</text>
+
+            <line x1="212" y1="53" x2="296" y2="53" stroke="#003C71" stroke-width="4"
+                  marker-end="url(#fl1)"/>
+
+            <rect x="300" y="10" width="200" height="86" rx="10"
+                  fill="#003C71" stroke="#003C71" stroke-width="4"/>
+            <text x="400" y="50" text-anchor="middle" font-size="28" font-weight="bold"
+                  fill="#FFFFFF">Arduino Nano</text>
+            <text x="400" y="80" text-anchor="middle" font-size="24" fill="#FFFFFF">firmware</text>
+
+            <line x1="504" y1="38" x2="588" y2="38" stroke="#003C71" stroke-width="4"
+                  marker-end="url(#fl1)"/>
+            <text x="546" y="28" text-anchor="middle" font-size="24" font-weight="bold"
+                  fill="#003C71">A:</text>
+            <line x1="588" y1="70" x2="504" y2="70" stroke="#C9A227" stroke-width="4"
+                  marker-end="url(#fl1d)"/>
+            <text x="546" y="96" text-anchor="middle" font-size="24" font-weight="bold"
+                  fill="#C9A227">S:</text>
+
+            <rect x="592" y="10" width="200" height="86" rx="10"
+                  fill="#FFFFFF" stroke="#003C71" stroke-width="4"/>
+            <text x="692" y="50" text-anchor="middle" font-size="28" font-weight="bold"
+                  fill="#14213D">Godot 4</text>
+            <text x="692" y="80" text-anchor="middle" font-size="24" fill="#003C71">GdSerial</text>
+
+            <line x1="400" y1="96" x2="400" y2="236" stroke="#003C71" stroke-width="4"
+                  marker-end="url(#fl1)"/>
+            <text x="412" y="172" font-size="24" fill="#003C71">PWM</text>
+
+            <rect x="300" y="240" width="200" height="86" rx="10"
+                  fill="#FFFFFF" stroke="#C9A227" stroke-width="4"/>
+            <text x="400" y="280" text-anchor="middle" font-size="28" font-weight="bold"
+                  fill="#14213D">Servo SG90</text>
+            <text x="400" y="310" text-anchor="middle" font-size="24" fill="#003C71">D4 · antena</text>
+          </svg>
+          <figcaption>Figura 1. Arquitectura: mando físico, firmware y escena, unidos por el
+          enlace serial a 9600 baudios.</figcaption>
+        </figure>
+      </section>
+
+    </div>
+
+    <!-- ============================ COLUMNA 2 ============================ -->
+    <div class="col">
+
+      <section>
+        <h2>5. Protocolo de comunicación</h2>
+        <table>
+          <caption>Tabla 1. Mensajes del enlace serial (texto 8N1 a 9600 baudios, terminados en
+          salto de línea).</caption>
+          <thead>
+            <tr><th>Sentido</th><th>Formato</th><th>Función</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Godot → Arduino</td><td><em>A:&lt;ángulo&gt;</em></td><td>Comando digital</td></tr>
+            <tr><td>Arduino → Godot</td><td><em>S:&lt;ángulo&gt;,&lt;fuente&gt;</em></td><td>Reporte; POT o DIG</td></tr>
+          </tbody>
+        </table>
+        <p class="nota">Solo se aplica un mensaje completo, con prefijo y valor entre 0 y 180;
+        el resto se descarta.</p>
+      </section>
+
+      <section>
+        <h2>6. Implementación no bloqueante</h2>
+        <p>El firmware no usa <em>delay()</em>: control y reporte se temporizan con
+        <em>millis()</em> (20 y 100&nbsp;ms) y el avance usa el tiempo real transcurrido. La
+        recepción es incremental —se acumula hasta el salto de línea y se valida entonces—, sin
+        <em>readStringUntil()</em>, que puede esperar un segundo.</p>
+        <p>En la escena se consulta <em>bytes_available()</em> y solo se lee cuando hay datos, con
+        espera cero.</p>
+      </section>
+
+      <section>
+        <h2>7. Representación digital</h2>
+        <figure>
+          <svg viewBox="0 0 600 320" role="img" aria-label="Pantalla de radar en semicírculo">
+            <path d="M 70 285 A 230 230 0 0 1 530 285 Z" fill="#003C71" fill-opacity="0.06"
+                  stroke="#003C71" stroke-width="4"/>
+            <path d="M 147 285 A 153 153 0 0 1 453 285" fill="none"
+                  stroke="#003C71" stroke-opacity="0.55" stroke-width="2.5"/>
+            <path d="M 223 285 A 77 77 0 0 1 377 285" fill="none"
+                  stroke="#003C71" stroke-opacity="0.55" stroke-width="2.5"/>
+            <line x1="300" y1="285" x2="70" y2="285" stroke="#003C71" stroke-opacity="0.55" stroke-width="2.5"/>
+            <line x1="300" y1="285" x2="530" y2="285" stroke="#003C71" stroke-opacity="0.55" stroke-width="2.5"/>
+            <line x1="300" y1="285" x2="300" y2="55" stroke="#003C71" stroke-opacity="0.55" stroke-width="2.5"/>
+            <line x1="300" y1="285" x2="137" y2="122" stroke="#003C71" stroke-opacity="0.35" stroke-width="2"/>
+            <line x1="300" y1="285" x2="463" y2="122" stroke="#003C71" stroke-opacity="0.35" stroke-width="2"/>
+
+            <path d="M 300 285 L 425 92 L 451 111 Z" fill="#C9A227" fill-opacity="0.30"/>
+            <line x1="300" y1="285" x2="436" y2="105" stroke="#C9A227" stroke-width="5"/>
+
+            <circle cx="188" cy="226" r="8" fill="#C9A227"/>
+            <circle cx="360" cy="101" r="8" fill="#C9A227"/>
+            <circle cx="375" cy="232" r="8" fill="#C9A227"/>
+            <circle cx="224" cy="143" r="8" fill="#C9A227"/>
+            <circle cx="300" cy="285" r="7" fill="#14213D"/>
+
+            <text x="26" y="312" font-size="24" fill="#003C71">−90°</text>
+            <text x="288" y="44" font-size="24" fill="#003C71">0°</text>
+            <text x="526" y="312" font-size="24" fill="#003C71">+90°</text>
+          </svg>
+          <figcaption>Figura 2. Los 0–180° del servo se reparten de −90° a +90°; los blancos se
+          ven al paso del haz.</figcaption>
+        </figure>
+      </section>
+
+      <section>
+        <h2>8. Arbitraje entre mandos</h2>
+        <div class="destacado">
+          <p><strong>Último mando que actúa gana, con histéresis.</strong> Un comando <em>A:</em>
+          fija el objetivo y marca la fuente DIG. El potenciómetro retoma el mando cuando se
+          aparta 5° o más y se mantiene así tres ciclos seguidos (60&nbsp;ms).</p>
+        </div>
+        <p>Tras la retoma, el firmware <strong>ignora los <em>A:</em> durante
+        500&nbsp;ms</strong>: el software no pelea con la mano del usuario. Aplicar el
+        potenciómetro en cada ciclo anula el comando digital en cuanto llega.</p>
+        <figure>
+          <svg viewBox="0 0 600 140" role="img" aria-label="Transiciones de la política de arbitraje">
+            <defs>
+              <marker id="fl3" viewBox="0 0 10 10" refX="9" refY="5"
+                      markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#003C71"/>
+              </marker>
+              <marker id="fl3d" viewBox="0 0 10 10" refX="9" refY="5"
+                      markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#C9A227"/>
+              </marker>
+            </defs>
+
+            <rect x="10" y="22" width="190" height="72" rx="12"
+                  fill="#FFFFFF" stroke="#C9A227" stroke-width="5"/>
+            <text x="105" y="58" text-anchor="middle" font-size="30" font-weight="bold"
+                  fill="#14213D">POT</text>
+            <text x="105" y="86" text-anchor="middle" font-size="21" fill="#003C71">mando físico</text>
+
+            <rect x="400" y="22" width="190" height="72" rx="12"
+                  fill="#003C71" stroke="#003C71" stroke-width="5"/>
+            <text x="495" y="58" text-anchor="middle" font-size="30" font-weight="bold"
+                  fill="#FFFFFF">DIG</text>
+            <text x="495" y="86" text-anchor="middle" font-size="21" fill="#FFFFFF">mando digital</text>
+
+            <text x="300" y="30" text-anchor="middle" font-size="21" fill="#003C71">A: válido</text>
+            <line x1="205" y1="44" x2="396" y2="44" stroke="#003C71" stroke-width="5"
+                  marker-end="url(#fl3)"/>
+
+            <line x1="396" y1="76" x2="205" y2="76" stroke="#C9A227" stroke-width="5"
+                  marker-end="url(#fl3d)"/>
+            <text x="300" y="124" text-anchor="middle" font-size="21" fill="#14213D">pot ≥ 5° · 3 ciclos · A: bloqueado 500 ms</text>
+          </svg>
+          <figcaption>Figura 3. Transiciones del arbitraje: el comando digital toma el mando y el
+          potenciómetro lo recupera con un giro sostenido.</figcaption>
+        </figure>
+      </section>
+
+    </div>
+
+    <!-- ============================ COLUMNA 3 ============================ -->
+    <div class="col">
+
+      <section>
+        <h2>9. Pruebas de estrés</h2>
+        <p>Se inyectaron comandos desde las dos fuentes a la vez: la escena enviando <em>A:</em>
+        mientras el potenciómetro se movía, más ráfagas de comandos inválidos. El sistema no se
+        desincronizó en ningún caso.</p>
+        <p><strong>El mando físico siempre gana.</strong> Apenas el potenciómetro se aparta 5°, la
+        fuente cambia a POT y los <em>A:</em> se descartan durante 500&nbsp;ms; pasado ese tiempo
+        la escena recupera el control.</p>
+        <p>Con el potenciómetro quieto el estado se mantuvo en DIG 12&nbsp;s seguidos; los
+        inválidos (<em>A:181</em>, <em>A:abc</em>, línea sin salto) se descartaron sin alterar el
+        ángulo. El reporte se sostuvo a 10&nbsp;Hz —101 mensajes en 10&nbsp;s— y el limitador
+        recortó la rampa a 360&nbsp;°/s.</p>
+      </section>
+
+      <section>
+        <h2>10. Parámetros del lazo</h2>
+        <table class="params">
+          <caption>Tabla 2. Valores fijados en el firmware y su efecto sobre la respuesta.</caption>
+          <thead>
+            <tr><th>Parámetro</th><th>Valor</th><th>Efecto</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Periodo de control</td><td>20 ms</td><td>50 ciclos por segundo, paso corto</td></tr>
+            <tr><td>Reporte serie</td><td>100 ms</td><td>La escena recibe el estado a 10 Hz</td></tr>
+            <tr><td>Velocidad máxima</td><td>360 °/s</td><td>El eje barre sin saltos bruscos</td></tr>
+            <tr><td>Umbral de seguimiento</td><td>2°</td><td>Se ignoran las variaciones mínimas</td></tr>
+            <tr><td>Promedio del ADC</td><td>8 muestras</td><td>La lectura no tiembla con el ruido</td></tr>
+            <tr><td>Retoma del mando</td><td>5° · 3 ciclos</td><td>El potenciómetro gana sin falsos positivos</td></tr>
+            <tr><td>Bloqueo tras retoma</td><td>500 ms</td><td>El software espera antes de volver a mandar</td></tr>
+          </tbody>
+        </table>
+        <p class="nota">Con estos valores las pruebas de estrés no produjeron saltos: el eje
+        siempre cedió al potenciómetro y la escena se mantuvo sincronizada.</p>
+      </section>
+
+      <section>
+        <h2>11. Análisis y conclusiones</h2>
+        <p>El firmware reporta el <strong>ángulo ordenado</strong>, no el medido: si el eje se
+        bloquea, la representación muestra un estado falso. Sin el flujo digital&nbsp;→&nbsp;físico
+        sería una sombra digital; sin el inverso no habría realimentación. El arbitraje con
+        histéresis y bloqueo resistió mandos simultáneos.</p>
+      </section>
+
+      <section class="referencias">
+        <h2>12. Referencias</h2>
+        <p>Kritzinger, W. et al. (2018). <em>Digital Twin in manufacturing.</em> IFAC ·
+        Glaessgen, E. y Stargel, D. (2012). <em>The Digital Twin Paradigm.</em> AIAA · Arduino.
+        <em>Servo</em> · GdSerial, <em>Serial Library for Godot 4</em>.</p>
+      </section>
+
+    </div>
+
+  </div>
+
+  <div class="pie">
+    <span>Laboratorio de clase · Realidad Mixta · 2026</span>
+    <span>Universidad de San Buenaventura · Bogotá</span>
+  </div>
+
+</div>
+
+<script>
+  const logo = document.getElementById('logo-usb');
+  function sinLogo() { document.body.classList.add('sin-logo'); }
+  logo.addEventListener('error', sinLogo);
+  window.addEventListener('load', () => {
+    if (!logo.complete || logo.naturalWidth === 0) sinLogo();
+  });
+</script>
+
+</body>
+</html>
